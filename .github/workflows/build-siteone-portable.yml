@@ -100,13 +100,22 @@ jobs:
           & (Join-Path $app 'siteone-crawler.exe') --version
           $code = $LASTEXITCODE
           if ($code -notin @(0, 2)) { throw "Crawler --version smoke test failed: $code" }
-          Write-Host "Release: $tag; architecture: $arch"
+          # SiteOne deliberately returns 2 for --version. GitHub Actions appends
+          # an exit using $LASTEXITCODE to pwsh steps, so clear that valid code.
+          $global:LASTEXITCODE = 0
+          Write-Host "Release: $tag; architecture: $arch; version check passed."
 
           $zip = Join-Path (Get-Location) "SiteOneCrawlerPortable-$tag-win-$arch.zip"
           Compress-Archive -Path (Join-Path $root '*') -DestinationPath $zip -CompressionLevel Optimal -Force
           "PORTABLE_ARCHIVE=$zip" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "TARGET_ARCH_VALUE=$arch" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) {
+            throw "Expected portable ZIP was not created: $zip"
+          }
+          Write-Host "Portable archive ready: $zip"
+          # Make success explicit for the GitHub Actions pwsh shell wrapper.
+          exit 0
 
       - name: Upload portable ZIP
         uses: actions/upload-artifact@v4
