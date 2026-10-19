@@ -1,0 +1,117 @@
+name: Build SiteOne Crawler Portable CLI (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag (for example v2.5.1). Leave blank for latest stable."
+        required: false
+        default: ""
+        type: string
+      architecture:
+        description: "Windows architecture"
+        required: true
+        default: x64
+        type: choice
+        options:
+          - x64
+          - arm64
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out builder files
+        uses: actions/checkout@v4
+
+      - name: Fetch official SiteOne release and assemble portable app
+        shell: pwsh
+        env:
+          REQUESTED_TAG: ${{ inputs.version }}
+          TARGET_ARCH: ${{ inputs.architecture }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $headers = @{
+            'User-Agent' = 'SiteOneCrawlerPortableBuilder'
+            'Accept' = 'application/vnd.github+json'
+            'Authorization' = "Bearer $env:GH_TOKEN"
+          }
+
+          $tag = $env:REQUESTED_TAG.Trim()
+          if ($tag) {
+            if (-not $tag.StartsWith('v')) { $tag = 'v' + $tag }
+            $encoded = [uri]::EscapeDataString($tag)
+            $api = "https://api.github.com/repos/janreges/siteone-crawler/releases/tags/$encoded"
+          } else {
+            $api = 'https://api.github.com/repos/janreges/siteone-crawler/releases/latest'
+          }
+          $release = Invoke-RestMethod -Uri $api -Headers $headers
+          if ($release.draft -or $release.prerelease) {
+            throw 'The selected release is not a stable release.'
+          }
+          $tag = [string]$release.tag_name
+          $arch = $env:TARGET_ARCH
+          $expectedName = "siteone-crawler-$tag-win-$arch.zip"
+          $asset = $release.assets | Where-Object { $_.name -eq $expectedName } | Select-Object -First 1
+          if (-not $asset) {
+            $available = ($release.assets | ForEach-Object { $_.name }) -join ', '
+            throw "Official release asset '$expectedName' not found. Available: $available"
+          }
+
+          New-Item -ItemType Directory -Path '_upstream' -Force | Out-Null
+          $archive = Join-Path (Get-Location) "_upstream\$expectedName"
+          Write-Host "Fetching official asset: $expectedName"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $archive
+          if ($asset.digest -and ([string]$asset.digest).StartsWith('sha256:')) {
+            $expectedHash = ([string]$asset.digest).Substring(7).ToLowerInvariant()
+            $actualHash = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($expectedHash -ne $actualHash) { throw 'Downloaded release SHA256 does not match upstream.' }
+            Write-Host 'Upstream SHA256 hash verified.'
+          } else {
+            Write-Warning 'Upstream release API did not supply a SHA256 digest for verification.'
+          }
+
+          $unpacked = Join-Path (Get-Location) '_upstream\unpacked'
+          Expand-Archive -Path $archive -DestinationPath $unpacked -Force
+          $exe = Get-ChildItem -Path $unpacked -Recurse -File -Filter 'siteone-crawler.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'Official archive does not contain siteone-crawler.exe.' }
+
+          $root = Join-Path (Get-Location) 'dist\SiteOneCrawlerPortable'
+          if (Test-Path $root) { Remove-Item -Path $root -Recurse -Force }
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          Copy-Item -Path 'portable\*' -Destination $root -Recurse -Force
+          $app = Join-Path $root 'App'
+          New-Item -ItemType Directory -Path $app -Force | Out-Null
+          Copy-Item -Path (Join-Path $exe.DirectoryName '*') -Destination $app -Recurse -Force
+
+          foreach ($folder in @('Data\Cache\HTTP','Data\Exports\Markdown','Data\Temp','Data\Profile')) {
+            New-Item -ItemType Directory -Path (Join-Path $root $folder) -Force | Out-Null
+          }
+          if (-not (Test-Path (Join-Path $app 'siteone-crawler.exe'))) {
+            throw 'Portable output is missing the crawler EXE.'
+          }
+
+          # The upstream CLI documents exit code 2 for --version and --help.
+          & (Join-Path $app 'siteone-crawler.exe') --version
+          $code = $LASTEXITCODE
+          if ($code -notin @(0, 2)) { throw "Crawler --version smoke test failed: $code" }
+          Write-Host "Release: $tag; architecture: $arch"
+
+          $zip = Join-Path (Get-Location) "SiteOneCrawlerPortable-$tag-win-$arch.zip"
+          Compress-Archive -Path (Join-Path $root '*') -DestinationPath $zip -CompressionLevel Optimal -Force
+          "PORTABLE_ARCHIVE=$zip" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "TARGET_ARCH_VALUE=$arch" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiteOneCrawlerPortable-${{ env.RELEASE_TAG }}-win-${{ env.TARGET_ARCH_VALUE }}
+          path: ${{ env.PORTABLE_ARCHIVE }}
+          if-no-files-found: error
+          retention-days: 1
