@@ -85,11 +85,16 @@ jobs:
           if (Test-Path $root) { Remove-Item -Path $root -Recurse -Force }
           New-Item -ItemType Directory -Path $root -Force | Out-Null
           Copy-Item -Path 'portable\*' -Destination $root -Recurse -Force
+          # Exclude the old website-specific launcher if it remains in an existing repo.
+          $obsolete = Join-Path $root 'PER-Method-Audit.cmd'
+          if (Test-Path -LiteralPath $obsolete) {
+            Remove-Item -LiteralPath $obsolete -Force
+          }
           $app = Join-Path $root 'App'
           New-Item -ItemType Directory -Path $app -Force | Out-Null
           Copy-Item -Path (Join-Path $exe.DirectoryName '*') -Destination $app -Recurse -Force
 
-          foreach ($folder in @('Data\Cache\HTTP','Data\Exports\Markdown','Data\Temp','Data\Profile')) {
+          foreach ($folder in @('Data\Cache\HTTP','Data\Exports\Markdown','Data\Exports\Audits','Data\Temp','Data\Profile')) {
             New-Item -ItemType Directory -Path (Join-Path $root $folder) -Force | Out-Null
           }
           if (-not (Test-Path (Join-Path $app 'siteone-crawler.exe'))) {

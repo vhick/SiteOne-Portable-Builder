@@ -1,61 +1,34 @@
-# SiteOne Crawler Portable (Windows CLI)
+# SiteOne Crawler Portable (Universal Windows CLI)
 
-This is an **unofficial** portable wrapper for the **official** SiteOne Crawler CLI.
+Unofficial portable command-line wrapper around the official Windows SiteOne Crawler executable. No PAF installation or compilation required.
 
-**No PAF, no installer, no extra runtime required.** The `.exe` downloaded by
-GitHub Actions is the official Windows binary, with browser rendering present
-in the upstream prebuilt release.
+## Launchers
 
-## Files
+- `Full-Website-Audit.cmd`: enter **any** website URL for a complete JavaScript-rendered SEO audit and Markdown export. Each run writes to `Data/Exports/Audits/<domain>/<timestamp>/` and generates `Pages/`, `All-Pages.md`, `SEO-Report.html`, `URL-Details.json`, `URLs.txt`.
+- `SEO-Audit.cmd`: enter any site for a basic SEO crawl. Default HTML/JSON/TXT reports are under `Data/tmp/`.
+- `JS-to-Markdown.cmd`: enter any site for JavaScript-rendered Markdown export. Results under `Data/Exports/Markdown/<timestamp>/`.
+- `Open-SiteOne-Terminal.cmd`: open the portable command line for advanced options.
+- `SiteOneCrawler.cmd`: main launcher that redirects the configuration, cache, temp, and user profile paths to `Data/`.
 
-- `App/siteone-crawler.exe` — official program (replaceable on update)
-- `Data/` — reports, Markdown exports, crawler HTTP cache and settings; keep it
-- `Other/` — documentation
-- `SiteOneCrawler.cmd` — general-purpose portable CLI launcher
-- `Open-SiteOne-Terminal.cmd` — command prompt opened in the portable folder
-- `SEO-Audit.cmd` — guided standard SEO scan
-- `JS-to-Markdown.cmd` — guided JS-rendered website-to-Markdown export
+You can enter a full `https://` or `http://` URL in the full audit launcher, or enter a bare domain name and HTTPS will be assumed.
 
-## Getting started
-
-1. Unzip the **portable ZIP produced by the Actions workflow**, not the builder kit.
-2. Run `SEO-Audit.cmd` to enter a website address and run a basic SEO crawl.
-3. For a JavaScript-rendered site, run `JS-to-Markdown.cmd` instead. Chrome or
-   Edge must be installed or Chromium available to the crawler; the upstream
-   program can offer to download a browser on first use.
-4. Find default HTML, JSON and TXT reports under `Data/tmp/`. Find your
-   Markdown exports under `Data/Exports/Markdown/<date-time>/`.
-
-For advanced commands, run `Open-SiteOne-Terminal.cmd`, then type:
+For advanced commands use `Open-SiteOne-Terminal.cmd`, then enter:
 
 ```bat
 SiteOneCrawler.cmd --help
-SiteOneCrawler.cmd --url=https://example.com
 SiteOneCrawler.cmd --url=https://example.com --browser
 ```
 
-The general-purpose CMD launcher changes directory to `Data` before starting
-SiteOne. Relative output paths supplied on the command line are therefore
-relative to `Data`.
-
 ## Updates
 
-Download a new portable ZIP from the Actions workflow. **Keep the existing
-`Data` folder.** You can replace `App`, `Other` and root `.cmd` files with the
-new copies. Do not delete, reset, or replace your existing Data folder.
+Replace `App/`, `Other/` and root `.cmd` files with newer versions from the GitHub Actions artifact. **Preserve the entire existing `Data/` folder.**
 
-## Portability notes
+## Portability and browser notes
 
-- The CLI itself is provided by its author as a standalone executable.
-- `SiteOneCrawler.cmd` redirects the common home/profile, temporary, cache,
-  and application-data environment variables to `Data`, and explicitly sets
-  the crawler's HTTP cache and configuration file paths.
-- This is not sandboxing: a browser installed elsewhere, the OS, antivirus,
-  proxy settings and networking facilities can still touch system-wide data.
-- Launching `App/siteone-crawler.exe` directly bypasses these protections.
-- Existing Chrome/Edge browser binaries are NOT copied into the ZIP.
-- Configurable browser settings and temporary browser profiles are upstream-
-  controlled and are not guaranteed to be fully contained by this wrapper.
+- The official Windows CLI is a standalone executable.
+- `SiteOneCrawler.cmd` changes the working directory to `Data/`; relative paths in commands are thus relative to `Data/`.
+- An installed Chrome, Edge, or supported Chromium-family browser is required for browser rendering; the upstream crawler may offer to download one.
+- Windows and external browsers may still create traces elsewhere. This wrapper is not a sandbox.
+- Launching `App/siteone-crawler.exe` directly bypasses portable path redirection.
 
 Official project: https://github.com/janreges/siteone-crawler
-Official license: https://github.com/janreges/siteone-crawler/blob/main/LICENSE
